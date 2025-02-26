@@ -9,7 +9,7 @@ use iced::{
 };
 
 use crate::{
-  Progress,
+  data::progress::Progress,
   mod_manager::{self, ModManager},
 };
 

@@ -2,13 +2,13 @@ use std::{path::PathBuf, sync::Arc};
 
 use futures::StreamExt;
 use iced::{
-  task::{self, sipper, Straw},
   Task,
+  task::{self, Straw, sipper},
 };
 use tokio::{fs, io::AsyncWriteExt};
 use url::Url;
 
-use crate::Progress;
+use crate::data::progress::Progress;
 
 #[derive(Debug, Clone)]
 pub struct Download {

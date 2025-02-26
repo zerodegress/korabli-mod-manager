@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use iced::{
-  task::{self, sipper, Straw},
   Task,
+  task::{self, Straw, sipper},
 };
 
 use crate::{
+  data::progress::Progress,
   mod_manager::{self, ModManager},
-  Progress,
 };
 
 #[derive(Debug, Clone)]
