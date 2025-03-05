@@ -48,12 +48,6 @@ pub enum Error {
 }
 
 impl ModManager {
-  pub fn new(res_mods_path: &Path) -> Self {
-    Self {
-      res_mods_path: res_mods_path.to_path_buf(),
-    }
-  }
-
   pub fn try_from_game_dir(
     game_dir_path: &Path,
   ) -> Result<Self, Error> {

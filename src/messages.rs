@@ -41,6 +41,7 @@ pub enum Message {
   InstallMod {
     path: PathBuf,
     id: String,
+    ty: String,
   },
   InstallModUpdated {
     id: String,

@@ -36,7 +36,7 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub enum UninstallUpdate {
   Running(Progress),
-  Finished(Result<ModManager, Error>),
+  Finished((Result<(), Error>, ModManager)),
 }
 
 impl Uninstall {
@@ -66,7 +66,14 @@ impl Uninstall {
         let (task, handle) = Task::sip(
           uninstall_mod(self.id.to_owned(), mod_manager),
           UninstallUpdate::Running,
-          UninstallUpdate::Finished,
+          |res| match res {
+            Err((err, mod_manager)) => {
+              UninstallUpdate::Finished((Err(err), mod_manager))
+            }
+            Ok(mod_manager) => {
+              UninstallUpdate::Finished((Ok(()), mod_manager))
+            }
+          },
         )
         .abortable();
         self.state = UninstallState::Running {
@@ -90,7 +97,7 @@ impl Uninstall {
             new_progress.current as f32 / new_progress.max as f32
           };
         }
-        UninstallUpdate::Finished(res) => {
+        UninstallUpdate::Finished((res, ..)) => {
           self.state = if res.is_ok() {
             UninstallState::Finished
           } else {
@@ -105,9 +112,11 @@ impl Uninstall {
 fn uninstall_mod(
   id: String,
   mut mod_manager: ModManager,
-) -> impl Straw<ModManager, Progress, Error> {
-  sipper(move |progress| async move {
-    mod_manager.uninstall_mod(&id).await.map_err(Arc::new)?;
+) -> impl Straw<ModManager, Progress, (Error, ModManager)> {
+  sipper(async move |progress| {
+    mod_manager.uninstall_mod(&id).await.map_err(|err| {
+      (Error::ModManager(Arc::new(err)), mod_manager.to_owned())
+    })?;
     Ok(mod_manager)
   })
 }

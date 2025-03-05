@@ -255,7 +255,14 @@ impl App {
                 {
                   self.downloads.remove(pos);
                 }
-                Task::done(Message::InstallMod { path, id })
+                Task::done(Message::InstallMod {
+                  path,
+                  ty: match self.request_mod(&id) {
+                    None => "".to_string(),
+                    Some(m) => m.ty.to_owned(),
+                  },
+                  id,
+                })
               }
             },
           }
@@ -263,7 +270,7 @@ impl App {
           Task::none()
         }
       }
-      Message::InstallMod { path, id } => {
+      Message::InstallMod { path, id, ty } => {
         let mut install = Install::new(
           id.as_str(),
           path.as_path(),
@@ -272,6 +279,7 @@ impl App {
             .map(|m| m.version.to_owned())
             .unwrap_or_default()
             .as_str(),
+          ty.as_str(),
         );
         if let Some(mod_manager) = self.mod_manager.take() {
           let task = install.start(mod_manager);
@@ -293,25 +301,35 @@ impl App {
           install.update(update.to_owned());
           match update {
             InstallUpdate::Running(_) => Task::none(),
-            InstallUpdate::Finished(res) => match res {
-              Err(err) => panic!("{}", err),
-              Ok(mod_manager) => {
-                if let Some(pos) =
-                  self.installs.iter().position(|x| x.id() == id)
-                {
-                  self.installs.remove(pos);
-                }
-                Task::batch([
+            InstallUpdate::Finished((res, mod_manager)) => {
+              match res {
+                Err(err) => Task::batch([
                   Task::done(Message::ModManagerReady {
                     mod_manager,
                   }),
-                  Task::done(Message::AddCurrentMod {
-                    id: id.to_string(),
+                  Task::done(Message::Warning {
+                    title: "模组安装失败！".to_string(),
+                    text: format!("理由：{}", err),
                   }),
-                  Task::done(Message::QueueUpdateRecords),
-                ])
+                ]),
+                Ok(()) => {
+                  if let Some(pos) =
+                    self.installs.iter().position(|x| x.id() == id)
+                  {
+                    self.installs.remove(pos);
+                  }
+                  Task::batch([
+                    Task::done(Message::ModManagerReady {
+                      mod_manager,
+                    }),
+                    Task::done(Message::AddCurrentMod {
+                      id: id.to_string(),
+                    }),
+                    Task::done(Message::QueueUpdateRecords),
+                  ])
+                }
               }
-            },
+            }
           }
         } else {
           Task::none()
@@ -339,25 +357,35 @@ impl App {
           uninstall.update(update.to_owned());
           match update {
             UninstallUpdate::Running(_) => Task::none(),
-            UninstallUpdate::Finished(res) => match res {
-              Err(err) => panic!("{}", err),
-              Ok(mod_manager) => {
-                if let Some(pos) =
-                  self.uninstalls.iter().position(|x| x.id() == id)
-                {
-                  self.uninstalls.remove(pos);
-                }
-                Task::batch([
+            UninstallUpdate::Finished((res, mod_manager)) => {
+              match res {
+                Err(err) => Task::batch([
                   Task::done(Message::ModManagerReady {
                     mod_manager,
                   }),
-                  Task::done(Message::RemoveCurrentMod {
-                    id: id.to_string(),
+                  Task::done(Message::Warning {
+                    title: "模组卸载失败！".to_string(),
+                    text: format!("理由：{}", err),
                   }),
-                  Task::done(Message::QueueUpdateRecords),
-                ])
+                ]),
+                Ok(()) => {
+                  if let Some(pos) =
+                    self.uninstalls.iter().position(|x| x.id() == id)
+                  {
+                    self.uninstalls.remove(pos);
+                  }
+                  Task::batch([
+                    Task::done(Message::ModManagerReady {
+                      mod_manager,
+                    }),
+                    Task::done(Message::RemoveCurrentMod {
+                      id: id.to_string(),
+                    }),
+                    Task::done(Message::QueueUpdateRecords),
+                  ])
+                }
               }
-            },
+            }
           }
         } else {
           Task::none()
@@ -365,7 +393,7 @@ impl App {
       }
       Message::ModManagerReady { mod_manager } => loop {
         if let Some(mut uninstall) = self.uninstalls.pop_front() {
-          if let &UninstallState::Ready | &UninstallState::Failed =
+          if let &UninstallState::Ready /* | &UninstallState::Failed */ =
             uninstall.state()
           {
             let task = uninstall.start(mod_manager);
@@ -379,7 +407,7 @@ impl App {
             });
           }
         } else if let Some(mut install) = self.installs.pop_front() {
-          if let &InstallState::Ready | &InstallState::Failed =
+          if let &InstallState::Ready /* | &InstallState::Failed */ =
             install.state()
           {
             let task = install.start(mod_manager);

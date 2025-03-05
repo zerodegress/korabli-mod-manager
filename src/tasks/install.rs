@@ -19,6 +19,7 @@ pub struct Install {
   path: PathBuf,
   version: String,
   state: InstallState,
+  ty: String,
 }
 
 #[derive(Debug, Clone)]
@@ -41,16 +42,17 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub enum InstallUpdate {
   Running(Progress),
-  Finished(Result<ModManager, Error>),
+  Finished((Result<(), Error>, ModManager)),
 }
 
 impl Install {
-  pub fn new(id: &str, path: &Path, version: &str) -> Self {
+  pub fn new(id: &str, path: &Path, version: &str, ty: &str) -> Self {
     Self {
       id: id.to_string(),
       path: path.to_path_buf(),
       version: version.to_string(),
       state: InstallState::Ready,
+      ty: ty.to_string(),
     }
   }
 
@@ -75,10 +77,16 @@ impl Install {
             self.id.to_owned(),
             self.path.to_owned(),
             self.version.to_owned(),
+            self.ty.to_owned(),
             mod_manager,
           ),
           InstallUpdate::Running,
-          InstallUpdate::Finished,
+          |res| {
+            InstallUpdate::Finished(match res {
+              Ok(mod_manager) => (Ok(()), mod_manager),
+              Err((err, mod_manager)) => (Err(err), mod_manager),
+            })
+          },
         )
         .abortable();
         self.state = InstallState::Running {
@@ -101,7 +109,7 @@ impl Install {
             new_progress.current as f32 / new_progress.max as f32
           };
         }
-        InstallUpdate::Finished(res) => {
+        InstallUpdate::Finished((res, ..)) => {
           self.state = if res.is_ok() {
             InstallState::Finished
           } else {
@@ -117,13 +125,22 @@ fn install_mod(
   id: String,
   path: PathBuf,
   version: String,
+  ty: String,
   mut mod_manager: ModManager,
-) -> impl Straw<ModManager, Progress, Error> {
-  sipper(move |progress| async move {
-    mod_manager
-      .install_zip_mod(path.as_ref(), id.as_ref(), version.as_ref())
-      .await
-      .map_err(Arc::new)?;
+) -> impl Straw<ModManager, Progress, (Error, ModManager)> {
+  sipper(async move |progress| {
+    match ty.as_str() {
+      "zip" => mod_manager.install_zip_mod(
+        path.as_ref(),
+        id.as_ref(),
+        version.as_ref(),
+      ),
+      _ => todo!(),
+    }
+    .await
+    .map_err(|err| {
+      (Error::ModManager(Arc::new(err)), mod_manager.to_owned())
+    })?;
     Ok(mod_manager)
   })
 }

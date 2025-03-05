@@ -20,6 +20,7 @@ pub struct Registry {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Mod {
   pub id: String,
+  pub ty: String,
   pub version: String,
   pub url: String,
   pub image_url: String,
